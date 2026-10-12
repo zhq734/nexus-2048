@@ -529,6 +529,8 @@ function toast(message) {
 /** 触发一次短震动。 */
 function vibrate(pattern) {
   if (!settings.vibration || !navigator.vibrate) return;
+  // 浏览器要求页面获得用户激活后才允许震动，否则会在控制台报策略错误。
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
   try { navigator.vibrate(pattern); } catch { /* 忽略不支持震动的环境。 */ }
 }
 
