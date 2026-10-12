@@ -46,7 +46,7 @@
           <div class="hero__copy">
             <p class="eyebrow"><span class="pulse-dot"></span> 多模式数字合成实验</p>
             <h1>把数字，<em>推到未来。</em></h1>
-            <p class="hero__lead">六种玩法、四种道具、AI 局势提示。每一次滑动，都是一次空间与概率的博弈。</p>
+            <p class="hero__lead">六种玩法、四种道具、AI 局势提示。每一次点击，都是一次空间与概率的博弈。</p>
           </div>
           <div class="hero__orb" aria-hidden="true">
             <div class="orb-ring orb-ring--outer"></div>
@@ -113,13 +113,23 @@
                   </div>
                 </div>
               </div>
+              <p class="board-hint" id="board-hint"><span aria-hidden="true">🖱</span> 点击棋盘任意一侧，或用下方方向键移动</p>
               <p class="ai-tip" id="ai-tip" hidden></p>
             </div>
 
             <div class="control-bar panel">
-              <button class="primary-button" type="button" data-action="new-game">
-                <span>↻</span> 新游戏
-              </button>
+              <div class="control-bar__group">
+                <button class="primary-button" type="button" data-action="new-game">
+                  <span>↻</span> 新游戏
+                </button>
+                <div class="dpad" id="dpad" role="group" aria-label="点击方向键移动">
+                  <button class="dpad__key dpad__key--up" type="button" data-direction="up" aria-label="向上移动">▲</button>
+                  <button class="dpad__key dpad__key--left" type="button" data-direction="left" aria-label="向左移动">◀</button>
+                  <span class="dpad__center" aria-hidden="true"></span>
+                  <button class="dpad__key dpad__key--right" type="button" data-direction="right" aria-label="向右移动">▶</button>
+                  <button class="dpad__key dpad__key--down" type="button" data-direction="down" aria-label="向下移动">▼</button>
+                </div>
+              </div>
               <div class="powerups" id="powerups" aria-label="道具"></div>
             </div>
           </div>
@@ -187,8 +197,8 @@
       </main>
 
       <footer class="footer">
-        <span>NEXUS 2048 · 用滑动编写数字宇宙</span>
-        <span>支持键盘 / 触屏 / 鼠标 · 数据保存在本地</span>
+        <span>NEXUS 2048 · 用点击编写数字宇宙</span>
+        <span>支持鼠标点击 / 方向键 / 键盘 · 数据保存在本地</span>
       </footer>
     </div>
 

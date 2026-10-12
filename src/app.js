@@ -13,6 +13,7 @@ import {
   undo,
 } from './engine.js';
 import { getMode, getModeList } from './modes.js';
+import { directionFromKey, directionFromPoint } from './input.js';
 import {
   clearGame,
   getModeStats,
@@ -31,6 +32,7 @@ const els = {
   board: document.querySelector('#board'),
   boardWrap: document.querySelector('#board-wrap'),
   boardFrame: document.querySelector('.board-frame'),
+  dpad: document.querySelector('#dpad'),
   boardModeName: document.querySelector('#board-mode-name'),
   overlay: document.querySelector('#board-overlay'),
   overlayBadge: document.querySelector('#overlay-badge'),
@@ -94,6 +96,7 @@ let hammerArmed = false;
 let terminalHandled = false;
 let hintTimer = null;
 let swipeStart = null;
+let suppressClickUntil = 0;
 let timerId = null;
 let userHasInteracted = false;
 
@@ -175,7 +178,7 @@ function renderBoard(effects = {}) {
       tile.classList.add('tile--obstacle');
       if (hammerArmed) {
         tile.classList.add('tile--hammerable');
-        tile.addEventListener('click', () => useHammer(index));
+        tile.addEventListener('click', (event) => { event.stopPropagation(); useHammer(index); });
       }
     } else if (value > 0) {
       tile.classList.add('tile--filled');
@@ -192,7 +195,7 @@ function renderBoard(effects = {}) {
       if (effects.hint === 'down' && index >= game.board.length - game.size) tile.classList.add('tile--hint');
       if (hammerArmed) {
         tile.classList.add('tile--hammerable');
-        tile.addEventListener('click', () => useHammer(index));
+        tile.addEventListener('click', (event) => { event.stopPropagation(); useHammer(index); });
       }
     }
     els.board.append(tile);
@@ -476,7 +479,7 @@ function showHint() {
   }
   const direction = DIRECTION_LABELS[result.direction];
   els.aiTip.hidden = false;
-  els.aiTip.textContent = `AI 建议：${direction}滑动 · 局势评分 ${Math.round(result.score)}`;
+  els.aiTip.textContent = `AI 建议：${direction}移动 · 局势评分 ${Math.round(result.score)}`;
   renderBoard({ hint: result.direction });
   if (hintTimer) clearTimeout(hintTimer);
   hintTimer = setTimeout(() => {
@@ -643,13 +646,10 @@ function bindEvents() {
 
   window.addEventListener('keydown', (event) => {
     if (event.target instanceof HTMLInputElement) return;
-    const keyMap = {
-      ArrowUp: 'up', ArrowRight: 'right', ArrowDown: 'down', ArrowLeft: 'left',
-      w: 'up', d: 'right', s: 'down', a: 'left', W: 'up', D: 'right', S: 'down', A: 'left',
-    };
-    if (keyMap[event.key]) {
+    const direction = directionFromKey(event.key);
+    if (direction) {
       event.preventDefault();
-      performMove(keyMap[event.key]);
+      performMove(direction);
       return;
     }
     if (event.key === ' ') {
@@ -661,7 +661,25 @@ function bindEvents() {
     if (event.key === 'h' || event.key === 'H') showHint();
   });
 
+  // 点击棋盘：以点击点相对棋盘中心的方向作为移动方向。
+  els.boardFrame.addEventListener('click', (event) => {
+    if (Date.now() < suppressClickUntil) return;
+    if (hammerArmed) return;
+    if (event.target.closest('.board-overlay')) return;
+    const direction = directionFromPoint(els.board.getBoundingClientRect(), event.clientX, event.clientY);
+    if (direction) performMove(direction);
+  });
+
+  // 点击方向键：与键盘共用同一套方向指令。
+  els.dpad?.addEventListener('click', (event) => {
+    const key = event.target.closest('[data-direction]');
+    if (!key) return;
+    performMove(key.dataset.direction);
+  });
+
+  // 触屏滑动作为移动端的补充操作，桌面端仍以点击为主。
   els.boardFrame.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse') return;
     swipeStart = { x: event.clientX, y: event.clientY, time: Date.now() };
     els.boardFrame.setPointerCapture?.(event.pointerId);
   });
@@ -672,6 +690,8 @@ function bindEvents() {
     const distance = Math.hypot(dx, dy);
     swipeStart = null;
     if (distance < 22) return;
+    // 触屏滑动后浏览器会补发 click，这里抑制一次以避免重复移动。
+    suppressClickUntil = Date.now() + 400;
     if (Math.abs(dx) > Math.abs(dy)) performMove(dx > 0 ? 'right' : 'left');
     else performMove(dy > 0 ? 'down' : 'up');
   });
