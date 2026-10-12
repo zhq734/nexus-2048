@@ -95,6 +95,7 @@ let terminalHandled = false;
 let hintTimer = null;
 let swipeStart = null;
 let timerId = null;
+let userHasInteracted = false;
 
 /**
  * 启动指定模式，并在可用时恢复存档。
@@ -529,8 +530,8 @@ function toast(message) {
 /** 触发一次短震动。 */
 function vibrate(pattern) {
   if (!settings.vibration || !navigator.vibrate) return;
-  // 浏览器要求页面获得用户激活后才允许震动，否则会在控制台报策略错误。
-  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+  // Chrome 要求当前页面帧内发生过真实用户手势，否则调用会触发控制台策略错误。
+  if (!userHasInteracted) return;
   try { navigator.vibrate(pattern); } catch { /* 忽略不支持震动的环境。 */ }
 }
 
@@ -592,6 +593,10 @@ function applyTheme() {
 
 /** 绑定全局交互。 */
 function bindEvents() {
+  ['pointerdown', 'keydown', 'touchstart'].forEach((type) => {
+    window.addEventListener(type, () => { userHasInteracted = true; }, { once: true, capture: true });
+  });
+
   document.addEventListener('click', (event) => {
     const actionNode = event.target.closest('[data-action]');
     if (!actionNode) return;
