@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nexus-2048-v2';
+const CACHE_NAME = 'nexus-2048-v3';
 const APP_SHELL = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const APP_SHELL = [
   './src/audio.js',
   './src/ai.js',
   './src/engine.js',
+  './src/input.js',
   './src/modes.js',
   './src/storage.js',
   './icons/icon.svg',

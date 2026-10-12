@@ -13,7 +13,7 @@ import {
   undo,
 } from './engine.js';
 import { getMode, getModeList } from './modes.js';
-import { directionFromKey, directionFromPoint } from './input.js';
+import { directionFromKey, directionFromPoint, directionFromSwipe } from './input.js';
 import {
   clearGame,
   getModeStats,
@@ -60,9 +60,11 @@ const els = {
   careerGrid: document.querySelector('#career-grid'),
   statsTable: document.querySelector('#stats-table'),
   aiTip: document.querySelector('#ai-tip'),
+  boardHint: document.querySelector('#board-hint'),
   settingsModal: document.querySelector('#settings-modal'),
   statsModal: document.querySelector('#stats-modal'),
   settingSound: document.querySelector('#setting-sound'),
+  settingInput: document.querySelector('#setting-input'),
   settingVibration: document.querySelector('#setting-vibration'),
   settingAi: document.querySelector('#setting-ai'),
   settingAutosave: document.querySelector('#setting-autosave'),
@@ -96,9 +98,48 @@ let hammerArmed = false;
 let terminalHandled = false;
 let hintTimer = null;
 let swipeStart = null;
-let suppressClickUntil = 0;
 let timerId = null;
 let userHasInteracted = false;
+let persistTimer = null;
+let careerSignature = '';
+let chartSignature = '';
+let chartThemeCache = null;
+let statsCache = { modeId: null, data: null };
+
+/**
+ * 读取并缓存当前主题的绘图配色。
+ *
+ * getComputedStyle 会强制同步样式计算，缓存后避免每次重绘都触发一次布局。
+ * @returns {{accent:string, border:string}} 主题配色
+ */
+function chartTheme() {
+  if (!chartThemeCache) {
+    const styles = getComputedStyle(document.documentElement);
+    chartThemeCache = {
+      accent: styles.getPropertyValue('--accent').trim(),
+      border: styles.getPropertyValue('--border-default').trim(),
+    };
+  }
+  return chartThemeCache;
+}
+
+/**
+ * 读取当前模式的统计数据，并在内存中缓存。
+ *
+ * 统计值只在开局与结算时变化，缓存后可避免每次移动都同步读取 localStorage。
+ * @returns {object} 当前模式的统计数据
+ */
+function currentModeStats() {
+  if (!statsCache.data || statsCache.modeId !== game.modeId) {
+    statsCache = { modeId: game.modeId, data: getModeStats(game.modeId) };
+  }
+  return statsCache.data;
+}
+
+/** 使统计数据缓存失效，下一次渲染时重新读取。 */
+function invalidateStatsCache() {
+  statsCache = { modeId: null, data: null };
+}
 
 /**
  * 启动指定模式，并在可用时恢复存档。
@@ -108,6 +149,9 @@ let userHasInteracted = false;
 function startMode(modeId, restore = true) {
   selectedMode = getMode(modeId).id;
   settings = saveSettings({ lastMode: selectedMode });
+  careerSignature = '';
+  chartSignature = '';
+  invalidateStatsCache();
   const saved = restore ? loadGame(selectedMode) : null;
   const dailyValid = saved?.seed === `daily-${getDailySeed()}`;
   const canRestore = saved && saved.status === 'playing' && (selectedMode !== 'daily' || dailyValid);
@@ -123,12 +167,18 @@ function startMode(modeId, restore = true) {
 /** 启动或重启限时模式计时器。 */
 function startTimer() {
   if (timerId) clearInterval(timerId);
+  let ticksSinceSave = 0;
   timerId = setInterval(() => {
     if (!game || game.status !== 'playing' || game.paused || game.timeLeft == null) return;
     game = tick(game, 1);
     if (game.status === 'lost') handleTerminal();
     renderStats();
-    if (game.moves % 5 === 0 && settings.autoSave) saveGame(game);
+    // 限时模式每 5 秒落盘一次，避免每秒写 localStorage。
+    ticksSinceSave += 1;
+    if (ticksSinceSave >= 5 && settings.autoSave) {
+      ticksSinceSave = 0;
+      saveGame(game);
+    }
   }, 1000);
 }
 
@@ -163,7 +213,8 @@ function renderModes() {
 function renderBoard(effects = {}) {
   const mode = getMode(game.modeId);
   els.board.style.setProperty('--grid-size', game.size);
-  els.board.innerHTML = '';
+  // 用 DocumentFragment 批量组装后再一次性替换，避免逐格插入触发多次重排。
+  const fragment = document.createDocumentFragment();
   const mergeValues = new Set(effects.mergeValues || []);
   const danger = dangerLevel(game);
 
@@ -198,9 +249,10 @@ function renderBoard(effects = {}) {
         tile.addEventListener('click', (event) => { event.stopPropagation(); useHammer(index); });
       }
     }
-    els.board.append(tile);
+    fragment.append(tile);
   });
 
+  els.board.replaceChildren(fragment);
   els.boardModeName.textContent = `${mode.name} · ${mode.timeLimit ? '限时' : `目标 ${game.target}`}`;
 }
 
@@ -220,7 +272,7 @@ function renderAll(effects = {}) {
 
 /** 渲染顶部统计卡。 */
 function renderStats() {
-  const modeStats = getModeStats(game.modeId);
+  const modeStats = currentModeStats();
   els.statScore.textContent = game.score.toLocaleString('zh-CN');
   els.statGain.textContent = game.lastMerges.length > 0 ? `+${game.lastMerges.reduce((sum, item) => sum + item.to, 0)}` : '+0';
   els.statTile.textContent = game.maxTile || 2;
@@ -232,21 +284,36 @@ function renderStats() {
   els.statGames.textContent = `${modeStats.games || 0} 局 · 胜 ${modeStats.wins || 0}`;
 }
 
-/** 渲染道具栏。 */
+/**
+ * 渲染道具栏。
+ *
+ * 首次调用时创建按钮，之后只更新计数、禁用态与激活态，
+ * 避免每步移动都重建 DOM 节点。
+ */
 function renderPowerups() {
-  els.powerups.innerHTML = '';
-  Object.entries(POWERUPS).forEach(([key, meta]) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'powerup';
-    button.dataset.powerup = key;
-    button.title = `${meta.label}（${game.powerups[key]}）`;
-    button.setAttribute('aria-label', `${meta.label}，剩余 ${game.powerups[key]}`);
-    button.disabled = game.powerups[key] <= 0 || game.status !== 'playing';
-    if (key === 'hammer' && hammerArmed) button.classList.add('is-armed');
-    button.innerHTML = `<span class="powerup__icon">${meta.icon}</span><span class="powerup__count">${game.powerups[key]}</span>`;
-    button.addEventListener('click', () => activatePowerup(key));
-    els.powerups.append(button);
+  const keys = Object.keys(POWERUPS);
+  if (els.powerups.childElementCount !== keys.length) {
+    els.powerups.innerHTML = '';
+    keys.forEach((key) => {
+      const meta = POWERUPS[key];
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'powerup';
+      button.dataset.powerup = key;
+      button.innerHTML = `<span class="powerup__icon">${meta.icon}</span><span class="powerup__count"></span>`;
+      button.addEventListener('click', () => activatePowerup(key));
+      els.powerups.append(button);
+    });
+  }
+  keys.forEach((key) => {
+    const meta = POWERUPS[key];
+    const button = els.powerups.querySelector(`[data-powerup="${key}"]`);
+    const count = game.powerups[key];
+    button.title = `${meta.label}（${count}）`;
+    button.setAttribute('aria-label', `${meta.label}，剩余 ${count}`);
+    button.disabled = count <= 0 || game.status !== 'playing';
+    button.classList.toggle('is-armed', key === 'hammer' && hammerArmed);
+    button.querySelector('.powerup__count').textContent = count;
   });
 }
 
@@ -280,19 +347,25 @@ function renderChart() {
   const context = canvas.getContext('2d');
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
-  const width = Math.max(220, rect.width);
-  const height = Math.max(120, rect.height);
-  canvas.width = width * dpr;
-  canvas.height = height * dpr;
+  const width = Math.max(220, Math.round(rect.width));
+  const height = Math.max(120, Math.round(rect.height));
+  // 先取尺寸再比对签名，避免额外的 clientWidth/clientHeight 强制同步布局。
+  const signature = `${game.modeId}:${game.scoreHistory.length}:${game.score}:${width}x${height}`;
+  if (signature === chartSignature) return;
+  chartSignature = signature;
+  const pixelWidth = Math.round(width * dpr);
+  const pixelHeight = Math.round(height * dpr);
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
   context.setTransform(dpr, 0, 0, dpr, 0, 0);
   context.clearRect(0, 0, width, height);
 
   const values = game.scoreHistory.length > 1 ? game.scoreHistory : [0, game.score];
   const max = Math.max(...values, 10);
   const padding = 12;
-  const styles = getComputedStyle(document.documentElement);
-  const accent = styles.getPropertyValue('--accent').trim();
-  const border = styles.getPropertyValue('--border-default').trim();
+  const { accent, border } = chartTheme();
 
   context.strokeStyle = border;
   context.lineWidth = 1;
@@ -339,7 +412,10 @@ function renderChart() {
 
 /** 渲染当前模式的生涯摘要。 */
 function renderCareer() {
-  const stats = getModeStats(game.modeId);
+  const stats = currentModeStats();
+  const signature = `${game.modeId}:${stats.bestScore}:${stats.bestTile}:${stats.wins}:${stats.games}`;
+  if (signature === careerSignature) return;
+  careerSignature = signature;
   const items = [
     ['最佳分数', (stats.bestScore || 0).toLocaleString('zh-CN')],
     ['最大方块', stats.bestTile || 0],
@@ -395,17 +471,37 @@ function performMove(direction) {
   if (result.gained > 0) sound.merge(result.gained);
   else sound.move(game.moves);
   vibrate(result.gained > 0 ? 18 : 8);
-  updateStats(game, false);
-  if (settings.autoSave) saveGame(game);
+  // 进行中的统计与存档改为延迟写入，避免每步移动都同步读写 localStorage。
+  schedulePersist();
   if (game.status === 'won' || game.status === 'lost') handleTerminal();
   renderAll({ spawnIndex: result.spawn?.index ?? null, mergeValues: result.state.lastMerges.map((item) => item.to) });
+}
+
+/**
+ * 延迟持久化当前对局。
+ *
+ * 合并短时间内的多次移动，只做一次 JSON 序列化与 localStorage 写入，
+ * 显著降低连续操作时的主线程开销。
+ */
+function schedulePersist() {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    if (!game || game.status !== 'playing') return;
+    // 统计与存档合并到同一批，连续移动时只写一次 localStorage。
+    updateStats(game, false);
+    invalidateStatsCache();
+    if (settings.autoSave) saveGame(game);
+  }, 350);
 }
 
 /** 处理胜利或失败结算。 */
 function handleTerminal() {
   if (terminalHandled) return;
   terminalHandled = true;
+  if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
   updateStats(game, true);
+  invalidateStatsCache();
   if (game.status === 'won') {
     sound.win();
     burstConfetti();
@@ -446,8 +542,7 @@ function activatePowerup(key) {
   sound.powerup();
   vibrate(24);
   hammerArmed = false;
-  updateStats(game, false);
-  if (settings.autoSave) saveGame(game);
+  schedulePersist();
   renderAll();
   toast(`${POWERUPS[key].label} 已生效`);
 }
@@ -464,7 +559,7 @@ function useHammer(index) {
   hammerArmed = false;
   sound.powerup();
   vibrate(24);
-  if (settings.autoSave) saveGame(game);
+  schedulePersist();
   renderAll();
   toast('已清除目标格子');
 }
@@ -503,6 +598,9 @@ function newGame() {
   game = createGame(selectedMode);
   terminalHandled = false;
   hammerArmed = false;
+  chartSignature = '';
+  careerSignature = '';
+  invalidateStatsCache();
   els.aiTip.hidden = true;
   renderAll();
   toast(`已开始 ${getMode(selectedMode).name}`);
@@ -572,10 +670,21 @@ function openStats() {
 /** 同步设置表单。 */
 function syncSettingsForm() {
   els.settingSound.checked = settings.sound;
+  if (els.settingInput) els.settingInput.value = settings.inputMode === 'swipe' ? 'swipe' : 'click';
   els.settingVibration.checked = settings.vibration;
   els.settingAi.checked = settings.aiHints;
   els.settingAutosave.checked = settings.autoSave;
   document.querySelector('[data-icon="sound"]').textContent = settings.sound ? '♪' : '×';
+}
+
+/** 根据当前操作方式刷新棋盘操作提示。 */
+function updateInputHint() {
+  if (!els.boardHint) return;
+  const swipe = settings.inputMode === 'swipe';
+  document.documentElement.dataset.input = swipe ? 'swipe' : 'click';
+  els.boardHint.innerHTML = swipe
+    ? '<span aria-hidden="true">🖐</span> 在棋盘上拖动鼠标或手指滑动，也可使用下方方向键'
+    : '<span aria-hidden="true">🖱</span> 点击棋盘任意一侧，或用下方方向键移动';
 }
 
 /** 循环切换主题。 */
@@ -585,6 +694,9 @@ function toggleTheme() {
   const next = themes[(themes.indexOf(current) + 1) % themes.length];
   document.documentElement.dataset.theme = next;
   settings = saveSettings({ theme: next });
+  // 主题变量会改变曲线配色，这里强制失效缓存后重绘。
+  chartSignature = '';
+  chartThemeCache = null;
   renderChart();
   toast(`主题：${next === 'aurora' ? '极光' : next === 'sunrise' ? '日出' : '星云'}`);
 }
@@ -643,6 +755,11 @@ function bindEvents() {
   els.settingVibration.addEventListener('change', () => { settings = saveSettings({ vibration: els.settingVibration.checked }); });
   els.settingAi.addEventListener('change', () => { settings = saveSettings({ aiHints: els.settingAi.checked }); });
   els.settingAutosave.addEventListener('change', () => { settings = saveSettings({ autoSave: els.settingAutosave.checked }); });
+  els.settingInput?.addEventListener('change', () => {
+    settings = saveSettings({ inputMode: els.settingInput.value === 'swipe' ? 'swipe' : 'click' });
+    updateInputHint();
+    toast(settings.inputMode === 'swipe' ? '已切换为滑动操作' : '已切换为点击操作');
+  });
 
   window.addEventListener('keydown', (event) => {
     if (event.target instanceof HTMLInputElement) return;
@@ -663,7 +780,7 @@ function bindEvents() {
 
   // 点击棋盘：以点击点相对棋盘中心的方向作为移动方向。
   els.boardFrame.addEventListener('click', (event) => {
-    if (Date.now() < suppressClickUntil) return;
+    if (settings.inputMode === 'swipe') return;
     if (hammerArmed) return;
     if (event.target.closest('.board-overlay')) return;
     const direction = directionFromPoint(els.board.getBoundingClientRect(), event.clientX, event.clientY);
@@ -677,29 +794,33 @@ function bindEvents() {
     performMove(key.dataset.direction);
   });
 
-  // 触屏滑动作为移动端的补充操作，桌面端仍以点击为主。
+  // 滑动操作：鼠标拖动与触屏滑动共用同一套方向解析。
   els.boardFrame.addEventListener('pointerdown', (event) => {
-    if (event.pointerType === 'mouse') return;
+    if (settings.inputMode !== 'swipe') return;
+    if (hammerArmed) return;
     swipeStart = { x: event.clientX, y: event.clientY, time: Date.now() };
     els.boardFrame.setPointerCapture?.(event.pointerId);
   });
   els.boardFrame.addEventListener('pointerup', (event) => {
     if (!swipeStart) return;
-    const dx = event.clientX - swipeStart.x;
-    const dy = event.clientY - swipeStart.y;
-    const distance = Math.hypot(dx, dy);
+    const start = swipeStart;
     swipeStart = null;
-    if (distance < 22) return;
-    // 触屏滑动后浏览器会补发 click，这里抑制一次以避免重复移动。
-    suppressClickUntil = Date.now() + 400;
-    if (Math.abs(dx) > Math.abs(dy)) performMove(dx > 0 ? 'right' : 'left');
-    else performMove(dy > 0 ? 'down' : 'up');
+    const direction = directionFromSwipe(start, { x: event.clientX, y: event.clientY }, 22);
+    if (!direction) return;
+    performMove(direction);
   });
   els.boardFrame.addEventListener('pointercancel', () => { swipeStart = null; });
 
   window.addEventListener('resize', renderChart);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && settings.autoSave && game) saveGame(game);
+    // 页面不可见时暂停持续动画并立即落盘，避免后台空转占用 CPU。
+    document.documentElement.dataset.motion = document.visibilityState === 'hidden' ? 'paused' : '';
+    if (document.visibilityState === 'hidden' && settings.autoSave && game) {
+      if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+      updateStats(game, false);
+      invalidateStatsCache();
+      saveGame(game);
+    }
   });
 }
 
@@ -714,6 +835,7 @@ function registerServiceWorker() {
 function init() {
   applyTheme();
   syncSettingsForm();
+  updateInputHint();
   bindEvents();
   startMode(selectedMode, true);
   registerServiceWorker();

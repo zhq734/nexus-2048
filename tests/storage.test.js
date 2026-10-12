@@ -55,6 +55,13 @@ test('settings 可以增量保存', () => {
   assert.equal(getSettings().sound, false);
 });
 
+test('settings 默认使用点击操作并支持切换为滑动', () => {
+  installStorage();
+  assert.equal(getSettings().inputMode, 'click');
+  saveSettings({ inputMode: 'swipe' });
+  assert.equal(getSettings().inputMode, 'swipe');
+});
+
 test('resetAll 清空存档、统计和设置', () => {
   installStorage();
   saveGame({ modeId: 'classic', board: [], score: 0 });

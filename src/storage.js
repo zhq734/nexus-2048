@@ -134,7 +134,7 @@ export function updateStats(state, finished = false) {
  * @returns {object} 设置
  */
 export function getSettings() {
-  return readJson(SETTINGS_KEY, { sound: true, vibration: true, theme: 'aurora', aiHints: true, autoSave: true });
+  return readJson(SETTINGS_KEY, { sound: true, vibration: true, theme: 'aurora', aiHints: true, autoSave: true, inputMode: 'click' });
 }
 
 /**

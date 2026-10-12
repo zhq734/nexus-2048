@@ -50,3 +50,19 @@ export function directionFromKey(key) {
   if (typeof key !== 'string') return null;
   return KEY_DIRECTIONS[key.toLowerCase()] ?? null;
 }
+
+/**
+ * 把一次拖动的起止坐标解析为方向指令。
+ * @param {{x:number, y:number}} start 拖动起点
+ * @param {{x:number, y:number}} end 拖动终点
+ * @param {number} [threshold] 触发方向所需的最小位移
+ * @returns {'up'|'right'|'down'|'left'|null} 解析出的方向，位移不足时为 null
+ */
+export function directionFromSwipe(start, end, threshold = 24) {
+  if (!start || !end) return null;
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  if (Math.hypot(dx, dy) < threshold) return null;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx > 0 ? 'right' : 'left';
+  return dy > 0 ? 'down' : 'up';
+}

@@ -1,9 +1,9 @@
 :root {
   color-scheme: dark;
   --bg-base: #060916;
-  --bg-elevated: rgba(16, 23, 47, 0.76);
+  --bg-elevated: rgba(16, 23, 47, 0.9);
   --bg-soft: rgba(255, 255, 255, 0.05);
-  --bg-board: rgba(7, 12, 30, 0.78);
+  --bg-board: rgba(7, 12, 30, 0.92);
   --text-primary: #f7f9ff;
   --text-secondary: #aab5d6;
   --text-muted: #69769d;
@@ -43,9 +43,9 @@
 html[data-theme='sunrise'] {
   color-scheme: light;
   --bg-base: #f5f0ea;
-  --bg-elevated: rgba(255, 255, 255, 0.82);
+  --bg-elevated: rgba(255, 255, 255, 0.92);
   --bg-soft: rgba(40, 30, 70, 0.06);
-  --bg-board: rgba(255, 255, 255, 0.78);
+  --bg-board: rgba(255, 255, 255, 0.94);
   --text-primary: #241d38;
   --text-secondary: #5d5576;
   --text-muted: #8b849e;
@@ -67,9 +67,9 @@ html[data-theme='sunrise'] {
 html[data-theme='nebula'] {
   color-scheme: dark;
   --bg-base: #0b0614;
-  --bg-elevated: rgba(31, 17, 46, 0.78);
+  --bg-elevated: rgba(31, 17, 46, 0.9);
   --bg-soft: rgba(255, 255, 255, 0.055);
-  --bg-board: rgba(19, 9, 32, 0.8);
+  --bg-board: rgba(19, 9, 32, 0.92);
   --text-primary: #fff4ff;
   --text-secondary: #cbb8d9;
   --text-muted: #887397;
@@ -114,6 +114,17 @@ body {
   transition: background 0.45s ease, color 0.45s ease;
 }
 
+/* 游戏界面属于交互控件，统一禁止选中文本，避免操作时误选数字与标签。 */
+.app-shell, .modal, .toast-stack {
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 表单控件仍需保持可编辑与可选中。 */
+input, select, textarea {
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
 button, input { font: inherit; }
 button { color: inherit; }
 
@@ -128,16 +139,18 @@ button { color: inherit; }
 .aurora__blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.42;
-  animation: drift 22s ease-in-out infinite alternate;
+  opacity: 0.5;
+  /* 用径向渐变替代 filter: blur()，避免大面积高斯模糊持续占用 GPU/CPU。 */
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--blob-color, var(--accent)) 62%, transparent) 0%, transparent 68%);
+  will-change: transform;
+  animation: drift 26s ease-in-out infinite alternate;
 }
 
-.aurora__blob--one { width: 46vw; height: 46vw; top: -14vw; left: -8vw; background: var(--accent); }
-.aurora__blob--two { width: 40vw; height: 40vw; top: 22vh; right: -12vw; background: var(--accent-two); animation-delay: -7s; }
-.aurora__blob--three { width: 36vw; height: 36vw; bottom: -14vw; left: 26vw; background: var(--accent-three); animation-delay: -14s; }
+.aurora__blob--one { --blob-color: var(--accent); width: 46vw; height: 46vw; top: -14vw; left: -8vw; }
+.aurora__blob--two { --blob-color: var(--accent-two); width: 40vw; height: 40vw; top: 22vh; right: -12vw; animation-delay: -9s; }
+.aurora__blob--three { --blob-color: var(--accent-three); width: 36vw; height: 36vw; bottom: -14vw; left: 26vw; animation-delay: -18s; }
 
-html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
+html[data-theme='sunrise'] .aurora__blob { opacity: 0.3; }
 
 @keyframes drift {
   from { transform: translate3d(0, 0, 0) scale(1); }
@@ -198,7 +211,6 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
   border-radius: 13px;
   color: var(--text-primary);
   background: var(--bg-elevated);
-  backdrop-filter: blur(18px);
   cursor: pointer;
   transition: transform 0.2s var(--ease-spring), border-color 0.2s ease, background 0.2s ease;
 }
@@ -212,7 +224,7 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
   border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-panel);
-  backdrop-filter: blur(22px);
+  contain: layout style;
 }
 
 .panel--hero {
@@ -253,13 +265,13 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
   margin-right: 7px;
   border-radius: 50%;
   background: var(--success);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 50%, transparent);
   animation: pulse 1.8s infinite;
+  will-change: transform, opacity;
 }
 
 @keyframes pulse {
-  70% { box-shadow: 0 0 0 10px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.45); opacity: 0.55; }
 }
 
 .hero__copy { position: relative; z-index: 1; }
@@ -332,9 +344,9 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
   width: 130px;
   height: 130px;
   border-radius: 50%;
-  background: var(--mode-accent, var(--accent));
-  filter: blur(40px);
-  opacity: 0.2;
+  /* 径向渐变模拟光晕，避免 filter: blur() 在悬停位移时反复重绘。 */
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--mode-accent, var(--accent)) 55%, transparent) 0%, transparent 70%);
+  opacity: 0.55;
   content: '';
 }
 
@@ -354,7 +366,7 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
 .board-column { display: grid; gap: 14px; min-width: 0; }
 
 .stats-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.stat-card { position: relative; display: grid; gap: 3px; padding: 14px 16px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-elevated); backdrop-filter: blur(20px); overflow: hidden; }
+.stat-card { position: relative; display: grid; gap: 3px; padding: 14px 16px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-elevated); contain: layout style; overflow: hidden; }
 .stat-card span { color: var(--text-muted); font-size: 11px; }
 .stat-card strong { font-size: clamp(20px, 3vw, 28px); letter-spacing: -0.04em; }
 .stat-card small { color: var(--text-secondary); font-size: 11px; }
@@ -390,7 +402,10 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
   background: var(--bg-board);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 30px 70px rgba(0, 0, 0, 0.2);
   touch-action: none;
+  cursor: pointer;
 }
+html[data-input='swipe'] .board-frame { cursor: grab; }
+html[data-input='swipe'] .board-frame:active { cursor: grabbing; }
 
 .board {
   position: relative;
@@ -426,15 +441,16 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
 .tile--obstacle { color: var(--text-muted); background: repeating-linear-gradient(135deg, var(--bg-soft), var(--bg-soft) 8px, color-mix(in srgb, var(--text-muted) 12%, transparent) 8px, color-mix(in srgb, var(--text-muted) 12%, transparent) 16px); font-size: 0; }
 .tile--obstacle::after { content: '◆'; font-size: clamp(14px, 3vw, 28px); }
 .tile--hammerable { cursor: crosshair; outline: 2px dashed var(--warning); outline-offset: -5px; }
-.tile--hint { animation: hint 1.1s ease-in-out infinite; }
-.tile--danger { animation: danger 0.5s ease-in-out infinite alternate; }
+.tile--hint { animation: hint 1.1s ease-in-out infinite; will-change: transform; }
+.tile--danger { animation: danger 0.5s ease-in-out infinite alternate; will-change: transform; }
 
 @keyframes spawn { from { opacity: 0; transform: scale(0.35); } to { opacity: 1; transform: scale(1); } }
 @keyframes merge { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }
-@keyframes hint { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 50% { box-shadow: 0 0 0 7px transparent; } }
-@keyframes danger { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 45%, transparent); } to { box-shadow: 0 0 0 6px transparent; } }
+/* 用 transform 而非 box-shadow 做脉冲，动画全程留在合成层，避免逐帧重绘。 */
+@keyframes hint { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes danger { from { transform: scale(1); } to { transform: scale(1.07); } }
 
-.board-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; border-radius: calc(var(--radius-lg) - 6px); background: color-mix(in srgb, var(--bg-base) 58%, transparent); backdrop-filter: blur(10px); }
+.board-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; border-radius: calc(var(--radius-lg) - 6px); background: color-mix(in srgb, var(--bg-base) 86%, transparent); }
 .board-overlay[hidden] { display: none; }
 .overlay-card { width: min(360px, 100%); padding: 24px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--bg-elevated); box-shadow: var(--shadow-panel); text-align: center; animation: rise 0.35s var(--ease-spring); }
 @keyframes rise { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -507,6 +523,17 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
 .danger-button { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); box-shadow: none; }
 
 .powerups { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.setting-select {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  color: var(--text-primary);
+  background: var(--bg-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+.setting-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .powerup {
   position: relative;
   display: grid;
@@ -563,8 +590,8 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
 
 .footer { display: flex; justify-content: space-between; gap: 16px; padding: 24px 6px 0; color: var(--text-muted); font-size: 11px; }
 
-.modal { width: min(480px, calc(100% - 28px)); padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); color: var(--text-primary); background: var(--bg-elevated); box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5); backdrop-filter: blur(26px); }
-.modal::backdrop { background: rgba(3, 6, 16, 0.62); backdrop-filter: blur(5px); }
+.modal { width: min(480px, calc(100% - 28px)); padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); color: var(--text-primary); background: var(--bg-elevated); box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5); }
+.modal::backdrop { background: rgba(3, 6, 16, 0.72); }
 .modal__card { display: grid; gap: 4px; padding: 22px; }
 .modal__card--wide { width: 100%; }
 .modal__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
@@ -582,7 +609,7 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
 .stats-row-item strong { font-size: 12px; }
 
 .toast-stack { position: fixed; z-index: 50; right: 18px; bottom: 18px; display: grid; gap: 9px; pointer-events: none; }
-.toast { min-width: 210px; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 12px; color: var(--text-primary); background: var(--bg-elevated); box-shadow: var(--shadow-panel); backdrop-filter: blur(20px); font-size: 12px; animation: toast-in 0.3s var(--ease-spring); }
+.toast { min-width: 210px; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 12px; color: var(--text-primary); background: var(--bg-elevated); box-shadow: var(--shadow-panel); font-size: 12px; animation: toast-in 0.3s var(--ease-spring); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(10px) translateX(10px); } to { opacity: 1; transform: translateY(0) translateX(0); } }
 .toast.is-leaving { animation: toast-out 0.25s ease forwards; }
 @keyframes toast-out { to { opacity: 0; transform: translateY(8px); } }
@@ -633,4 +660,15 @@ html[data-theme='sunrise'] .aurora__blob { opacity: 0.22; filter: blur(110px); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+/* 页面不可见或用户关闭动效时，统一暂停所有持续动画，避免后台空转占用 CPU。 */
+html[data-motion='paused'] *,
+html[data-motion='paused'] *::before,
+html[data-motion='paused'] *::after {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora__blob, .orb-ring, .radar__sweep, .pulse-dot { animation: none !important; }
 }
