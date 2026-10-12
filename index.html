@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="aurora">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#070b1a" />
+    <meta name="description" content="NEXUS 2048：支持经典、迷你、禅意、闪电战、混沌与每日挑战的多模式创意 2048 游戏。" />
+    <title>NEXUS 2048 · 多模式创意数字游戏</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="aurora" aria-hidden="true">
+      <span class="aurora__blob aurora__blob--one"></span>
+      <span class="aurora__blob aurora__blob--two"></span>
+      <span class="aurora__blob aurora__blob--three"></span>
+    </div>
+    <div class="noise" aria-hidden="true"></div>
+
+    <div id="app" class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="NEXUS 2048 首页">
+          <span class="brand__mark">N</span>
+          <span class="brand__text">
+            <strong>NEXUS</strong>
+            <small>2048 · 多维数字空间</small>
+          </span>
+        </a>
+        <nav class="topbar__actions" aria-label="全局操作">
+          <button class="icon-button" type="button" data-action="toggle-sound" title="音效开关" aria-label="音效开关">
+            <span data-icon="sound">♪</span>
+          </button>
+          <button class="icon-button" type="button" data-action="toggle-theme" title="切换主题" aria-label="切换主题">
+            <span data-icon="theme">◐</span>
+          </button>
+          <button class="icon-button" type="button" data-action="open-settings" title="设置" aria-label="设置">
+            <span>⚙</span>
+          </button>
+        </nav>
+      </header>
+
+      <main class="layout">
+        <section class="hero panel panel--hero">
+          <div class="hero__copy">
+            <p class="eyebrow"><span class="pulse-dot"></span> 多模式数字合成实验</p>
+            <h1>把数字，<em>推到未来。</em></h1>
+            <p class="hero__lead">六种玩法、四种道具、AI 局势提示。每一次滑动，都是一次空间与概率的博弈。</p>
+          </div>
+          <div class="hero__orb" aria-hidden="true">
+            <div class="orb-ring orb-ring--outer"></div>
+            <div class="orb-ring orb-ring--inner"></div>
+            <div class="orb-core">2048</div>
+          </div>
+        </section>
+
+        <section class="mode-section panel" aria-labelledby="mode-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">STEP 01</p>
+              <h2 id="mode-title">选择你的规则</h2>
+            </div>
+            <span class="section-note" id="mode-note">经典 4×4 · 目标 2048</span>
+          </div>
+          <div class="mode-grid" id="mode-grid" role="radiogroup" aria-label="游戏模式"></div>
+        </section>
+
+        <section class="game-area">
+          <div class="board-column">
+            <div class="stats-row" aria-label="实时数据">
+              <article class="stat-card">
+                <span>分数</span>
+                <strong id="stat-score">0</strong>
+                <small id="stat-gain">+0</small>
+              </article>
+              <article class="stat-card">
+                <span>最高方块</span>
+                <strong id="stat-tile">2</strong>
+                <small id="stat-target">目标 2048</small>
+              </article>
+              <article class="stat-card">
+                <span id="stat-time-label">步数</span>
+                <strong id="stat-moves">0</strong>
+                <small id="stat-combo">连击 0</small>
+              </article>
+              <article class="stat-card stat-card--best">
+                <span>历史最佳</span>
+                <strong id="stat-best">0</strong>
+                <small id="stat-games">0 局</small>
+              </article>
+            </div>
+
+            <div class="board-wrap panel" id="board-wrap">
+              <div class="board-header">
+                <div class="board-title">
+                  <span class="board-title__dot"></span>
+                  <span id="board-mode-name">经典 4×4</span>
+                </div>
+                <div class="board-tools">
+                  <button class="text-button" type="button" data-action="ai-hint">✦ AI 提示</button>
+                  <button class="text-button" type="button" data-action="pause">暂停</button>
+                </div>
+              </div>
+              <div class="board-frame">
+                <div class="board" id="board" role="grid" aria-label="2048 棋盘"></div>
+                <div class="board-overlay" id="board-overlay" hidden>
+                  <div class="overlay-card">
+                    <span class="overlay-card__badge" id="overlay-badge">系统提示</span>
+                    <h3 id="overlay-title">准备开始</h3>
+                    <p id="overlay-text">选择模式并开始合成数字。</p>
+                    <div class="overlay-card__actions" id="overlay-actions"></div>
+                  </div>
+                </div>
+              </div>
+              <p class="ai-tip" id="ai-tip" hidden></p>
+            </div>
+
+            <div class="control-bar panel">
+              <button class="primary-button" type="button" data-action="new-game">
+                <span>↻</span> 新游戏
+              </button>
+              <div class="powerups" id="powerups" aria-label="道具"></div>
+            </div>
+          </div>
+
+          <aside class="side-column">
+            <section class="panel insight-card">
+              <div class="section-heading section-heading--compact">
+                <div>
+                  <p class="eyebrow">LIVE INSIGHT</p>
+                  <h2>局势雷达</h2>
+                </div>
+                <span class="risk-badge" id="risk-badge">安全</span>
+              </div>
+              <div class="radar" id="radar">
+                <div class="radar__ring radar__ring--one"></div>
+                <div class="radar__ring radar__ring--two"></div>
+                <div class="radar__ring radar__ring--three"></div>
+                <div class="radar__sweep"></div>
+                <div class="radar__dot"></div>
+              </div>
+              <p class="insight-copy" id="insight-copy">局势平稳，继续扩大棋盘空间。</p>
+              <div class="metric-list">
+                <div><span>空格率</span><strong id="metric-empty">100%</strong></div>
+                <div><span>合并效率</span><strong id="metric-efficiency">0.0</strong></div>
+                <div><span>最大连击</span><strong id="metric-combo">0</strong></div>
+              </div>
+            </section>
+
+            <section class="panel history-card">
+              <div class="section-heading section-heading--compact">
+                <div>
+                  <p class="eyebrow">SCORE CURVE</p>
+                  <h2>本局曲线</h2>
+                </div>
+                <span class="section-note" id="history-delta">+0</span>
+              </div>
+              <canvas id="score-chart" width="520" height="220" aria-label="分数增长曲线"></canvas>
+            </section>
+
+            <section class="panel stats-card">
+              <div class="section-heading section-heading--compact">
+                <div>
+                  <p class="eyebrow">CAREER</p>
+                  <h2>生涯数据</h2>
+                </div>
+                <button class="text-button" type="button" data-action="open-stats">全部</button>
+              </div>
+              <div class="career-grid" id="career-grid"></div>
+            </section>
+          </aside>
+        </section>
+
+        <section class="tips panel">
+          <div class="tips__intro">
+            <p class="eyebrow">FIELD NOTES</p>
+            <h2>生存指南</h2>
+            <p>先稳住一个角落，再让数字像潮水一样向它汇聚。</p>
+          </div>
+          <div class="tip-cards">
+            <article><span>01</span><h3>锁定角落</h3><p>把最大方块固定在一角，减少被小数字切断的概率。</p></article>
+            <article><span>02</span><h3>保持蛇形</h3><p>按大小顺序排列方块，能给新方块留下可预测的落点。</p></article>
+            <article><span>03</span><h3>慎用道具</h3><p>撤销与锤子留给真正危险的一步，而不是普通失误。</p></article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span>NEXUS 2048 · 用滑动编写数字宇宙</span>
+        <span>支持键盘 / 触屏 / 鼠标 · 数据保存在本地</span>
+      </footer>
+    </div>
+
+    <dialog class="modal" id="settings-modal">
+      <form method="dialog" class="modal__card">
+        <div class="modal__head">
+          <div><p class="eyebrow">SYSTEM</p><h2>设置</h2></div>
+          <button class="icon-button" value="cancel" aria-label="关闭">✕</button>
+        </div>
+        <label class="setting-row"><span><strong>音效</strong><small>合成器音效与和弦</small></span><input type="checkbox" id="setting-sound" /></label>
+        <label class="setting-row"><span><strong>震动反馈</strong><small>移动端触感提示</small></span><input type="checkbox" id="setting-vibration" /></label>
+        <label class="setting-row"><span><strong>AI 提示</strong><small>显示推荐移动方向</small></span><input type="checkbox" id="setting-ai" /></label>
+        <label class="setting-row"><span><strong>自动存档</strong><small>刷新后继续本局</small></span><input type="checkbox" id="setting-autosave" /></label>
+        <div class="modal__actions">
+          <button class="danger-button" type="button" data-action="reset-data">清空本地数据</button>
+          <button class="primary-button" value="confirm">完成</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="stats-modal">
+      <form method="dialog" class="modal__card modal__card--wide">
+        <div class="modal__head">
+          <div><p class="eyebrow">CAREER ARCHIVE</p><h2>生涯数据</h2></div>
+          <button class="icon-button" value="cancel" aria-label="关闭">✕</button>
+        </div>
+        <div class="stats-table" id="stats-table"></div>
+      </form>
+    </dialog>
+
+    <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
+    <div class="confetti" id="confetti" aria-hidden="true"></div>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
